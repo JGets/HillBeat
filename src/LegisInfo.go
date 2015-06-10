@@ -132,26 +132,40 @@ type Bills struct {
 
 func main() {
     var bills Bills
-    resp, err := http.Get("http://www.parl.gc.ca/LegisInfo/Home.aspx?Language=E&Mode=1&ParliamentSession=41-2&download=xml")
-    if err != nil {
-        //ERROR
-    }
+    var page = 0
+    var prevLength = -1
 
-    decoder := xml.NewDecoder(resp.Body)
-    for {
-        t, _ := decoder.Token()
-        if t == nil {
-            break
+    //Increment page # until parsed length doesn't change; 
+    //  limit to 10 pages (to prevent infinite loop; and will we really ever have more than 5000 bills in a session?)
+    for prevLength < len(bills.BillList) && page < 10 {
+        prevLength = len(bills.BillList)
+        page++
+
+        resp, err := http.Get(fmt.Sprintf("http://www.parl.gc.ca/LegisInfo/Home.aspx?Language=E&Mode=1&ParliamentSession=41-2&download=xml&page=%d", page))
+        if err != nil {
+            panic(err)
         }
+        
 
-        switch se := t.(type) {
-        case xml.StartElement:
-            if se.Name.Local == "Bills" {
-                decoder.DecodeElement(&bills, &se)
+        decoder := xml.NewDecoder(resp.Body)
+        for {
+            t, _ := decoder.Token()
+            if t == nil {
+                break
             }
-        default:
+
+            switch se := t.(type) {
+            case xml.StartElement:
+                if se.Name.Local == "Bills" {
+                    decoder.DecodeElement(&bills, &se)
+                }
+            default:
+            }
         }
+
+        fmt.Printf("read number of bills: %d, page %d\n", len(bills.BillList), page)
     }
 
-    fmt.Printf("Total number of bills: %d \n", len(bills.BillList))
+    fmt.Printf("Total number of bills: %d \tTested %d pages\n", len(bills.BillList), page)
+
 }
